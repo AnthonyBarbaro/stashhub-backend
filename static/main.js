@@ -9,6 +9,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const brandList    = document.getElementById("brand-list");
   const runForm      = document.getElementById("run-form");
 
+  // ── Initialize Choices on the multi-select ───────────────────
+  const brandPicker = new Choices(brandList, {
+    removeItemButton: true,
+    placeholderValue: 'Type to search brands',
+    searchPlaceholderValue: 'Filter brands…',
+    shouldSort: false,            // keep server order
+    duplicateItemsAllowed: false,
+  });
+
   // ── Spinner helpers ───────────────────────────────────────────
   function showLoading(msg = "Loading…") {
     loadingMsg.textContent = msg;
@@ -18,18 +27,20 @@ document.addEventListener("DOMContentLoaded", () => {
     loading.classList.add("hidden");
   }
 
-  // ── Load brands into the <select> ─────────────────────────────
+  // ── Load brands into the Choices instance ─────────────────────
   async function loadBrands() {
     const res = await fetch("/brands");
     if (!res.ok) throw new Error("Could not fetch brands");
     const brands = await res.json();
 
-    brandList.innerHTML = "";
-    brands.forEach(b => {
-      const opt = document.createElement("option");
-      opt.value = opt.textContent = b;
-      brandList.appendChild(opt);
-    });
+    // feed Choices a fresh list
+    brandPicker.clearChoices();
+    brandPicker.setChoices(
+      brands.map(b => ({ value: b, label: b })),
+      'value',
+      'label',
+      true
+    );
 
     brandSection.classList.remove("hidden");
     runForm.classList.remove("hidden");
@@ -41,15 +52,12 @@ document.addEventListener("DOMContentLoaded", () => {
     showLoading("Running Selenium… this may take a minute");
 
     try {
-      // 1) kick off scraping & await JSON { ok, msg }
       const res  = await fetch("/update-files", { method: "POST" });
       const json = await res.json();
       hideLoading();
 
       if (res.ok) {
-        // only alert on success
         alert("✅ " + json.msg);
-        // then load brands for step 2
         await loadBrands();
       } else {
         console.error("Catalog scrape failed:", json.msg);
@@ -65,7 +73,8 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
 
     const emails = document.getElementById("emails").value.trim();
-    const brands = [...brandList.selectedOptions].map(o => o.value);
+    // get array of selected brand values
+    const brands = brandPicker.getValue(true);
 
     if (!emails) {
       alert("Please enter at least one email address.");

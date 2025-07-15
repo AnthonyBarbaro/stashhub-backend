@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <title>Brand Inventory Uploader</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}">
+  <!-- Choices.js CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
 </head>
 <body>
   <header>📦 Brand Inventory Uploader</header>
@@ -11,6 +13,10 @@
   <div id="loading" class="hidden">
       <div class="loader"></div><span id="loading-msg"></span>
   </div>
+
+  <!-- Your JS -->
   <script src="{{ url_for('static', filename='main.js') }}"></script>
+  <!-- Choices.js -->
+  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
 </body>
 </html>
