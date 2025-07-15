@@ -1,0 +1,18 @@
+body       { font-family:"Segoe UI",sans-serif; background:#f5f5f5; margin:0; }
+header     { background:#4CAF50; color:#fff; padding:15px 30px; font-size:22px; }
+main       { padding:30px; }
+button     { background:#4CAF50; color:#fff; border:none; padding:8px 18px;
+             font-weight:bold; cursor:pointer; border-radius:4px; }
+select     { width:300px; height:150px; }
+
+/* --- overlay first --- */
+#loading   { position:fixed; inset:0; background:rgba(255,255,255,.8);
+             display:flex; flex-direction:column; align-items:center;
+             justify-content:center; z-index:9999; }
+
+.loader    { border:6px solid #eee; border-top:6px solid #4CAF50; border-radius:50%;
+             width:40px; height:40px; animation:spin 1s linear infinite; margin-bottom:10px; }
+@keyframes spin { 100% { transform:rotate(360deg);} }
+
+/* --- hide utility with higher specificity --- */
+#loading.hidden { display:none; }

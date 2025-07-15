@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+{% block content %}
+<form id="update-form">
+  <h3>1. Update Files</h3>
+  <button type="submit">Update Files (run Selenium)</button>
+</form>
+
+<hr>
+
+<section id="brand-section" class="hidden">
+  <h3>2. Select Brands</h3>
+  <select multiple id="brand-list"></select>
+</section>
+
+<hr>
+
+<form id="run-form" class="hidden">
+  <h3>3. Generate & Upload & Email</h3>
+  <label>Email(s)</label>
+  <input type="text" id="emails" placeholder="a@xyz.com, b@abc.com"><br><br>
+  <button type="submit">Run Pipeline</button>
+</form>
+{% endblock %}
