@@ -113,4 +113,29 @@ body {
       font-size: 0.95rem;    /* slightly smaller font */
     }
   }
-  
+  .site-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .settings-link {
+    font-size: 1.2rem;
+    text-decoration: none;
+    color: white;
+    margin-right: 1rem;
+  }
+  .status-message {
+  font-weight: bold;
+  padding: 10px;
+  margin: 10px 0;
+  display: none;
+}
+.status-message.visible {
+  display: block;
+}
+.status-message.success {
+  color: green;
+}
+.status-message.error {
+  color: red;
+}

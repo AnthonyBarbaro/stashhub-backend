@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<h2>⚙️ Settings</h2>
+<p>Enter your Dutchie credentials and define your stores:</p>
+
+<div class="setup-form">
+  <label>Username</label>
+  <input type="text" id="du-user" value="{{ cfg.username }}">
+  <label>Password</label>
+  <input type="password" id="du-pass" value="{{ cfg.password }}">
+
+  <h3>Your Stores</h3>
+  <table id="store-table">
+    <thead><tr><th>Store Name</th><th>Abbreviation</th><th></th></tr></thead>
+    <tbody>
+      {% for name, abbr in cfg.store_map.items() %}
+        <tr>
+          <td><input value="{{ name }}"></td>
+          <td><input value="{{ abbr }}"></td>
+          <td><button class="del">✕</button></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <button id="add-row" type="button">+ Add Store</button>
+  <br><br>
+  <button id="save-setup" type="button">Save &amp; Continue</button>
+  <p id="setup-msg" class="status-message"></p>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+  {{ super() }} {# keeps Choices + main.js #}
+  <script src="{{ url_for('static', filename='setup.js') }}"></script>
+{% endblock %}

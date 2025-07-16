@@ -5,6 +5,9 @@
   <button type="submit">Update Files (run Selenium)</button>
 </form>
 
+<!-- ⬇️ Add status line here -->
+<p id="status-message" class="status-message"></p>
+
 <hr>
 
 <section id="brand-section" class="hidden">
@@ -12,13 +15,12 @@
   <select id="brand-list" name="brands" multiple></select>
 </section>
 
-
 <hr>
 
 <form id="run-form" class="hidden">
   <h3>3. Generate & Upload & Email</h3>
   <label>Email(s)</label>
   <input type="text" id="emails" placeholder="a@xyz.com, b@abc.com"><br><br>
-  <button type="submit">Run Pipeline</button>
+  <button type="submit">Run</button>
 </form>
 {% endblock %}

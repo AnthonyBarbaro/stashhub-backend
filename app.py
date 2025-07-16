@@ -1,77 +1,115 @@
 #!/usr/bin/env python3
 """
-Flask front-end for the Brand-Inventory pipeline.
-
-Routes
-------
-GET  /               → main HTML page
-POST /update-files   → starts Selenium scrape in background
-GET  /brands         → list of brands from data/csv
-POST /run            → starts full pipeline in background
-GET  /status         → last-status.txt contents
+Brand‑Inventory Flask front‑end
+  • /setup  – wizard → stores.json  (username, password, store_map)
+  • /update-files – launches getCatalog.py once per store
+  • /brands, /run – unchanged pipeline endpoints
+  • /status – plain‑text progress
 """
 
-import sys
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
-    sys.stderr.reconfigure(encoding="utf-8")
+import os, sys, json, subprocess, threading, logging
+from pathlib import Path
+from flask import Flask, render_template, request, jsonify, redirect, url_for
 
-import os, logging, threading
-from flask import Flask, render_template, request, jsonify
-from inventory_core import get_catalog, scan_brands, run_full_pipeline
+# ────── paths ──────────────────────────────────────────
+ROOT        = Path(__file__).resolve().parent
+DATA_ROOT   = ROOT / "data"
+CSV_DIR     = DATA_ROOT / "csv"
+XLSX_DIR    = DATA_ROOT / "xlsx"
+STATUS_FILE = DATA_ROOT / "last_status.txt"
+STORES_JSON = ROOT / "stores.json"
 
-# ─── Config ───────────────────────────────────────────────────────────
-APP         = Flask(__name__)
-DATA_ROOT   = os.path.abspath("data")
-CSV_DIR     = os.path.join(DATA_ROOT, "csv")
-XLSX_DIR    = os.path.join(DATA_ROOT, "xlsx")
-STATUS_FILE = "last_status.txt"
-LOG_PATH    = "server.log"
+for d in (CSV_DIR, XLSX_DIR):
+    d.mkdir(parents=True, exist_ok=True)
 
-for d in (DATA_ROOT, CSV_DIR, XLSX_DIR):
-    os.makedirs(d, exist_ok=True)
+# ────── logging ────────────────────────────────────────
+logging.basicConfig(level=logging.INFO,
+    format="💬 %(asctime)s | %(levelname)-7s | %(message)s")
+log = logging.getLogger("inventory‑flask")
 
-# ─── Logging ──────────────────────────────────────────────────────────
-logging.basicConfig(
-    level=logging.INFO,
-    format="💬 %(asctime)s | %(levelname)-7s | %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(LOG_PATH, mode="a", encoding="utf-8")
-    ],
-)
-log = logging.getLogger("brand-inventory-flask")
+# ────── helpers ────────────────────────────────────────
+def load_cfg() -> dict:
+    if STORES_JSON.exists():
+        try:
+            return json.loads(STORES_JSON.read_text(encoding="utf‑8"))
+        except json.JSONDecodeError:
+            log.warning("stores.json is corrupted → resetting")
+    return {"username": "", "password": "", "store_map": {}}
 
-def write_status(msg: str):
+def save_cfg(cfg: dict):
+    STORES_JSON.write_text(json.dumps(cfg, indent=2), encoding="utf‑8")
+
+def write_status(s): 
     with open(STATUS_FILE, "w", encoding="utf-8") as f:
-        f.write(msg)
+        f.write(s)
 
-# ─── Routes ──────────────────────────────────────────────────────────
+# ────── Flask app ──────────────────────────────────────
+APP = Flask(__name__)
+
+# ----------  Setup wizard  -----------------------------
+@APP.route("/setup", methods=["GET"])
+def setup_get():
+    return render_template("setup.html", cfg=load_cfg())
+
+@APP.route("/setup", methods=["POST"])
+def setup_post():
+    data = request.get_json(force=True)
+    cfg  = {
+        "username":  data.get("username", "").strip(),
+        "password":  data.get("password", "").strip(),
+        "store_map": data.get("store_map", {}),
+    }
+    save_cfg(cfg)
+    return jsonify(ok=True, msg="Settings saved")
+
+# ----------  Main UI  ----------------------------------
 @APP.route("/")
 def index():
+    if not STORES_JSON.exists():
+        return redirect(url_for("setup_get"))
     return render_template("index.html")
+
+# ----------  Catalog scrape  ---------------------------
 @APP.post("/update-files")
 def update_files():
-    # 1) clear out old CSVs
-    log.info("📥  Clearing old CSVs in %s", CSV_DIR)
-    for fn in os.listdir(CSV_DIR):
-        if fn.lower().endswith(".csv"):
+    cfg = load_cfg()
+    if not (cfg.get("username") and cfg.get("password") and cfg["store_map"]):
+        return jsonify(ok=False, msg="Run setup first"), 400
+
+    # clear old CSVs
+    for f in CSV_DIR.glob("*.csv"):
+        f.unlink(missing_ok=True)
+
+    def worker():
+        user = cfg["username"]
+        pw   = cfg["password"]
+
+        for store_name, abbr in cfg["store_map"].items():
+            write_status(f"⏳ Scraping {store_name} …")
+            cmd = [
+                sys.executable, "getCatalog.py", str(CSV_DIR),
+                "--username", user, "--password", pw
+            ]
+            env = os.environ.copy()
+            env["STORE_NAME"] = store_name
+            env["STORE_ABBR"] = abbr
             try:
-                os.remove(os.path.join(CSV_DIR, fn))
-            except Exception:
-                pass
+                subprocess.check_call(cmd, cwd=ROOT, env=env)
+                write_status(f"✅ {store_name} downloaded")
+            except subprocess.CalledProcessError:
+                write_status(f"❌ Failed to download from {store_name}")
+                break
+            except Exception as e:
+                write_status(f"❌ Unexpected error: {e}")
+                break
+        else:
+            write_status("✅ All stores done")
 
-    # 2) run Selenium scraper synchronously
-    log.info("📥  Starting catalog scrape")
-    res = get_catalog(CSV_DIR)   # → { ok: bool, msg: str }
+    threading.Thread(target=worker, daemon=True).start()
+    return jsonify(ok=True, msg="Scrape started"), 202
 
-    # 3) write the same status your JS used to poll for
-    status_msg = ("✅ " if res["ok"] else "❌ ") + res["msg"]
-    write_status(status_msg)
-
-    # 4) return real JSON so the front-end can await it
-    code = 200 if res["ok"] else 500
-    return jsonify(ok=res["ok"], msg=res["msg"]), code
+# ----------  Brand / pipeline  -------------------------
+from inventory_core import scan_brands, run_full_pipeline
 
 @APP.get("/brands")
 def brands():
@@ -81,26 +119,32 @@ def brands():
 
 @APP.post("/run")
 def run_pipeline():
+    print("✅ /run endpoint hit")  # DEBUG
     data = request.get_json(force=True)
+    print("📦 received brands:", data.get("brands"))
+    print("📧 received emails:", data.get("emails"))
+
     def bg():
-        log.info("🚀  Pipeline started")
-        st = run_full_pipeline(CSV_DIR, XLSX_DIR, data["brands"], data["emails"])
-        msg = ("✅ " + st["msg"]) if st["ok"] else f"❌ {st['msg']}"
-        write_status(msg)
-        log.info("🏁  Pipeline finished → %s", msg)
+        try:
+            st = run_full_pipeline(CSV_DIR, XLSX_DIR,
+                                   data["brands"], data["emails"])
+            print("📊 run_full_pipeline result:", st)
+            write_status(("✅ " if st["ok"] else "❌ ") + st["msg"])
+        except Exception as e:
+            print("🔥 Exception in pipeline:", e)
+            write_status("❌ Internal error: " + str(e))
 
     threading.Thread(target=bg, daemon=True).start()
     return jsonify(ok=True, msg="Pipeline started"), 202
 
+
 @APP.get("/status")
 def status():
     try:
-        txt = open(STATUS_FILE, encoding="utf-8").read()
+        return STATUS_FILE.read_text(encoding="utf‑8"), 200, {
+            "Content-Type": "text/plain; charset=utf-8"}
     except FileNotFoundError:
-        txt = "No status yet."
-    return txt, 200, {"Content-Type":"text/plain; charset=utf-8"}
+        return "No status yet.", 200
 
-# ─── Main ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    log.info("🌐  Starting server on http://127.0.0.1:5000")
-    APP.run(host="0.0.0.0", port=5000, threaded=True)
+    APP.run(port=5000, threaded=True)

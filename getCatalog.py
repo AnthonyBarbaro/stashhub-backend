@@ -1,60 +1,34 @@
 #!/usr/bin/env python3
 """
-getCatalog.py
+getCatalog.py (single‑store version)
 
-Selenium script to scrape Dutchie back-office and download CSVs.
-
-Usage:
-    python getCatalog.py <download_folder>
+• With --list-stores          → prints JSON list of store keys
+• With STORE_NAME/STORE_ABBR  → downloads *one* store’s CSV
 """
 
-import sys
-import os
-import time
+import argparse, json, os, sys, time
 from datetime import datetime
-from dotenv import load_dotenv
-
+from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 
-# ── Load credentials from .env ────────────────────────────────────
-load_dotenv()
-USERNAME = os.getenv("USERNAME")
-PASSWORD = os.getenv("PASSWORD")
-if not USERNAME or not PASSWORD:
-    print("⚠️  Please set USERNAME and PASSWORD in your .env")
-    sys.exit(1)
+# ─── CLI args ────────────────────────────────────────────
+def cli():
+    p = argparse.ArgumentParser()
+    p.add_argument("download_folder", help="Folder for CSVs")
+    p.add_argument("--username", required=True)
+    p.add_argument("--password", required=True)
+    p.add_argument("--list-stores", action="store_true")
+    return p.parse_args()
 
-# ── Store abbreviation map ─────────────────────────────────────────
-STORE_ABBR = {
-    "Buzz Cannabis - Mission Valley":      "MV",
-    "Buzz Cannabis-La Mesa":               "LM",
-    "Buzz Cannabis - SORRENTO VALLEY":     "SV",
-    "Buzz Cannabis - Lemon Grove":         "LG",
-    "Buzz Cannabis (National City)":       "NC",
-}
-
-# ── Helpers ────────────────────────────────────────────────────────
-def wait_for_new_file(folder, before, timeout=60):
-    """Wait up to `timeout` seconds for a new file to show up in `folder`."""
-    time.sleep(1)
-    end = time.time() + timeout
-    while time.time() < end:
-        now = set(os.listdir(folder))
-        diff = now - before
-        if diff:
-            return diff.pop()
-        time.sleep(1)
-    return None
-
+# ─── Setup browser ───────────────────────────────────────
 def launch_browser(download_dir):
-    """Start headless Chrome, download dir = `download_dir`."""
     os.makedirs(download_dir, exist_ok=True)
     opts = Options()
     opts.add_argument("--window-size=1920,1080")
@@ -67,100 +41,103 @@ def launch_browser(download_dir):
         "download.directory_upgrade": True,
         "safebrowsing.enabled": True,
     })
-    driver = webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
-        options=opts
-    )
-    driver.get("https://dusk.backoffice.dutchie.com/products/catalog")
-    return driver
+    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
 
-def login(driver):
-    """Fill in username/password and submit."""
+# ─── Selenium actions ─────────────────────────────────────
+def login(driver, user, pw):
+    driver.get("https://dusk.backoffice.dutchie.com/products/catalog")
     wait = WebDriverWait(driver, 10)
-    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "input[data-testid='auth_input_username']"))).send_keys(USERNAME)
-    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "input[data-testid='auth_input_password']"))).send_keys(PASSWORD)
-    login_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[data-testid='auth_button_go-green']")))
-    login_button.click()
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "input[data-testid='auth_input_username']"))).send_keys(user)
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "input[data-testid='auth_input_password']"))).send_keys(pw)
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[data-testid='auth_button_go-green']"))).click()
+    time.sleep(2)
 
 def open_store_dropdown(driver):
-    """Open the store selector dropdown."""
     try:
-        w = WebDriverWait(driver, 10)
-        dd = w.until(EC.element_to_be_clickable(
-            (By.XPATH, "//div[@data-testid='header_select_location']")
-        ))
-        driver.execute_script("arguments[0].scrollIntoView();", dd)
+        wait = WebDriverWait(driver, 10)
+        dd = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@data-testid='header_select_location']")))
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", dd)
         dd.click()
         time.sleep(1)
     except TimeoutException:
-        print("⚠️  Store dropdown not found")
+        print("⚠️  Could not open store dropdown")
 
-def select_store(driver, name):
-    """Select a store by its exact display name."""
-    time.sleep(1)
+def list_store_keys(driver):
+    open_store_dropdown(driver)
+    items = driver.find_elements(By.CSS_SELECTOR, "li[data-testid^='rebrand-header_menu-item_']")
+    return [i.get_attribute("data-testid").split("_", 1)[1] for i in items]
+
+def select_store(driver, store_name):
     open_store_dropdown(driver)
     try:
-        w = WebDriverWait(driver, 10)
-        li = w.until(EC.element_to_be_clickable((
-            By.XPATH,
-            f"//li[@data-testid='rebrand-header_menu-item_{name}']"
-        )))
-        driver.execute_script("arguments[0].click();", li)
+        wait = WebDriverWait(driver, 10)
+        # Find <li> where .text matches the visible name
+        options = driver.find_elements(By.CSS_SELECTOR, "li[data-testid^='rebrand-header_menu-item_']")
+        for option in options:
+            if option.text.strip() == store_name:
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", option)
+                driver.execute_script("arguments[0].click();", option)
+                print(f"✅ Selected store: {store_name}", flush=True)
+                time.sleep(2)
+                return
+        raise TimeoutException(f"No matching <li> for: {store_name}")
+    except Exception as e:
+        print(f"❌ Store selection failed: {e}", file=sys.stderr)
+        raise
+
+def wait_for_new_file(folder, before, timeout=60):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        diff = set(os.listdir(folder)) - before
+        if diff:
+            return diff.pop()
         time.sleep(1)
-        return True
-    except TimeoutException:
-        print(f"⚠️  Could not select store '{name}'")
-        return False
+    return None
 
-def export_csv(driver, download_dir, store_name):
-    """Trigger Actions→Export CSV and rename the downloaded file."""
-    time.sleep(8)  # let page settle
-    w = WebDriverWait(driver, 10)
-    before = set(os.listdir(download_dir))
+def export_csv(driver, folder, abbr):
+    time.sleep(6)  # Let catalog settle
+    wait = WebDriverWait(driver, 10)
+    before = set(os.listdir(folder))
 
-    # Open Actions menu
-    w.until(EC.element_to_be_clickable((By.ID, "actions-menu-button"))).click()
-    # Click Export
-    w.until(EC.element_to_be_clickable((
-        By.CSS_SELECTOR,
-        "li[data-testid='catalog-list-actions-menu-item-export']"
-    ))).click()
-    # Confirm CSV
-    w.until(EC.element_to_be_clickable((
-        By.CSS_SELECTOR,
-        "[data-testid='export-table-modal-export-csv-button']"
-    ))).click()
+    wait.until(EC.element_to_be_clickable((By.ID, "actions-menu-button"))).click()
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "li[data-testid='catalog-list-actions-menu-item-export']"))).click()
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='export-table-modal-export-csv-button']"))).click()
 
-    fname = wait_for_new_file(download_dir, before, timeout=60)
+    fname = wait_for_new_file(folder, before)
     if not fname:
-        print("⚠️  No CSV downloaded for", store_name)
-        return
+        raise RuntimeError("❌ CSV download timed out")
 
-    abbr = STORE_ABBR.get(store_name, "UNK")
     today = datetime.now().strftime("%m-%d-%Y")
-    ext = os.path.splitext(fname)[1]
-    new_name = f"{today}_{abbr}{ext}"
-    os.rename(
-        os.path.join(download_dir, fname),
-        os.path.join(download_dir, new_name)
-    )
-    print(f"✅ Downloaded and renamed → {new_name}")
+    new_name = f"{today}_{abbr}{Path(fname).suffix}"
+    Path(folder, fname).rename(Path(folder, new_name))
+    print(f"✅ CSV saved → {new_name}")
 
-# ── Main ────────────────────────────────────────────────────────────
+# ─── Main ─────────────────────────────────────────────────
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: python getCatalog.py <download_folder>")
-        sys.exit(1)
+    args = cli()
+    folder = args.download_folder
+    user   = args.username
+    pw     = args.password
 
-    download_dir = sys.argv[1]
-    driver = launch_browser(download_dir)
+    store_name = os.getenv("STORE_NAME")
+    store_abbr = os.getenv("STORE_ABBR")
+
+    driver = launch_browser(folder)
 
     try:
-        login(driver)
-        for store in STORE_ABBR:
-            if not select_store(driver, store):
-                break
-            export_csv(driver, download_dir, store)
+        login(driver, user, pw)
+
+        if args.list_stores:
+            print(json.dumps(list_store_keys(driver)))
+            return
+
+        if not (store_name and store_abbr):
+            print("❌ STORE_NAME and STORE_ABBR must be set in env", file=sys.stderr)
+            sys.exit(1)
+
+        select_store(driver, store_name)
+        export_csv(driver, folder, store_abbr)
+
     finally:
         driver.quit()
 

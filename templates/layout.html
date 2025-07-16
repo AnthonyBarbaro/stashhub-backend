@@ -2,17 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">  <!-- NEW -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Brand Inventory Uploader</title>
 
   <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}">
-  <!-- Choices.js CSS -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
 </head>
 <body>
-  <header>📦 Brand Inventory Uploader</header>
+  <header class="site-header">
+    <span>📦 Brand Inventory Uploader</span>
+    <a href="{{ url_for('setup_get') }}" class="settings-link" title="Settings">⚙️</a>
 
-  <!-- wrap in a max-width container -->
+  </header>
+
   <div class="container">
     <main>{% block content %}{% endblock %}</main>
   </div>
@@ -21,9 +24,10 @@
     <div class="loader"></div><span id="loading-msg"></span>
   </div>
 
-  <!-- Your JS -->
-  <script src="{{ url_for('static', filename='main.js') }}"></script>
-  <!-- Choices.js -->
-  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+  {# everything JS‑related lives in this block #}
+  {% block extra_scripts %}
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+  {% endblock %}
 </body>
 </html>

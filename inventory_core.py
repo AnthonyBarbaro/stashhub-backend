@@ -2,7 +2,7 @@
 Core helpers shared by both the GUI and Flask versions.
 """
 
-import subprocess, sys, os
+import subprocess, sys, os,json
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import Font, Alignment, PatternFill
@@ -12,7 +12,17 @@ import subprocess
 # ---------------------------------------------------------------------------
 # get_catalog() – wraps your Selenium script
 # ---------------------------------------------------------------------------
+STORE_FILE = os.path.join(os.path.dirname(__file__), "stores.json")
 
+def load_store_map():
+    if os.path.exists(STORE_FILE):
+        with open(STORE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}  # empty until user configures
+
+def save_store_map(m):
+    with open(STORE_FILE, "w", encoding="utf-8") as f:
+        json.dump(m, f, indent=2, ensure_ascii=False)
 def get_catalog(dest_folder: str) -> dict:
     # compute path to getCatalog.py
     script_path = os.path.abspath(
