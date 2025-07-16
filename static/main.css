@@ -1,31 +1,64 @@
-body       { font-family:"Segoe UI",sans-serif; background:#f5f5f5; margin:0; }
-header     { background:#4CAF50; color:#fff; padding:15px 30px; font-size:22px; }
-main       { padding:30px; }
-button     { background:#4CAF50; color:#fff; border:none; padding:8px 18px;
-             font-weight:bold; cursor:pointer; border-radius:4px; }
-select     { width:300px; height:150px; }
-
-/* --- overlay first --- */
-#loading   { position:fixed; inset:0; background:rgba(255,255,255,.8);
-             display:flex; flex-direction:column; align-items:center;
-             justify-content:center; z-index:9999; }
-
-.loader    { border:6px solid #eee; border-top:6px solid #4CAF50; border-radius:50%;
-             width:40px; height:40px; animation:spin 1s linear infinite; margin-bottom:10px; }
-@keyframes spin { 100% { transform:rotate(360deg);} }
-
-/* --- hide utility with higher specificity --- */
-#loading.hidden { display:none; }
 /* main.css */
 
-/* Make the pills a bit taller & rounded */
-.choices__item--selectable {
+/* --- Base resets & fonts --- */
+body {
+    font-family: "Segoe UI", sans-serif;
+    background: #f5f5f5;
+    margin: 0;
+  }
+  header {
+    background: #4CAF50;
+    color: #fff;
+    padding: 15px 30px;
+    font-size: 1.4rem;
+    text-align: center;
+  }
+  
+  /* --- Responsive container --- */
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 16px;
+  }
+  
+  /* --- Main content spacing --- */
+  main {
+    padding: 30px 0;
+  }
+  
+  /* --- Buttons & inputs --- */
+  button {
+    background: #4CAF50;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 1rem;
+  }
+  input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px;
+    font-size: 1rem;
+    margin-bottom: 12px;
+  }
+  
+  /* --- Choices pills tweaks --- */
+  .choices__inner {
+    border: 1px solid #ddd;
+    min-height: 2.5em;
+  }
+  .choices__list--dropdown {
+    border: 1px solid #ddd;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  .choices__item--selectable {
     border-radius: 12px;
     padding: 0.3em 0.8em;
     font-size: 0.9em;
   }
-  
-  /* Style the remove button “×” */
   .choices__button {
     color: #888;
     margin-left: 0.4em;
@@ -34,13 +67,50 @@ select     { width:300px; height:150px; }
     color: #444;
   }
   
-  /* Ensure the dropdown and input match your theme */
-  .choices__inner {
-    border: 1px solid #ddd;
-    min-height: 2.5em;
+  /* --- Overlay spinner --- */
+  #loading {
+    position: fixed;
+    inset: 0;
+    background: rgba(255,255,255,.8);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
   }
-  .choices__list--dropdown {
-    border: 1px solid #ddd;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  .loader {
+    border: 6px solid #eee;
+    border-top: 6px solid #4CAF50;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 10px;
+  }
+  @keyframes spin {
+    100% { transform: rotate(360deg); }
+  }
+  #loading.hidden {
+    display: none;
+  }
+  
+  /* --- Form & section spacing --- */
+  form, section {
+    margin-bottom: 24px;
+  }
+  
+  /* --- Mobile-specific tweaks --- */
+  @media (max-width: 600px) {
+    header {
+      font-size: 1.2rem;
+      padding: 12px;
+    }
+    button {
+      width: 100%;           /* full-width buttons */
+      padding: 12px 0;
+    }
+    .choices__inner {
+      font-size: 0.95rem;    /* slightly smaller font */
+    }
   }
   

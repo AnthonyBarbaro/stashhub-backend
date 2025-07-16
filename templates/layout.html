@@ -2,16 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">  <!-- NEW -->
   <title>Brand Inventory Uploader</title>
+
   <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}">
   <!-- Choices.js CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
 </head>
 <body>
   <header>📦 Brand Inventory Uploader</header>
-  <main>{% block content %}{% endblock %}</main>
+
+  <!-- wrap in a max-width container -->
+  <div class="container">
+    <main>{% block content %}{% endblock %}</main>
+  </div>
+
   <div id="loading" class="hidden">
-      <div class="loader"></div><span id="loading-msg"></span>
+    <div class="loader"></div><span id="loading-msg"></span>
   </div>
 
   <!-- Your JS -->

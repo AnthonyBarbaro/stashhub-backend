@@ -114,7 +114,7 @@ def select_store(driver, name):
 
 def export_csv(driver, download_dir, store_name):
     """Trigger Actions→Export CSV and rename the downloaded file."""
-    time.sleep(5)  # let page settle
+    time.sleep(8)  # let page settle
     w = WebDriverWait(driver, 10)
     before = set(os.listdir(download_dir))
 
