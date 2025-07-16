@@ -107,7 +107,14 @@ document.addEventListener("DOMContentLoaded", () => {
       showStatus("❌ Network error: " + err.message, true);
     }
   });
-
+  document.getElementById("select-all-brands").addEventListener("click", () => {
+    const allValues = Array.from(brandList.options).map(opt => opt.value);
+    brandPicker.setChoiceByValue(allValues);
+  });
+  
+  document.getElementById("clear-all-brands").addEventListener("click", () => {
+    brandPicker.removeActiveItems();
+  });
   runForm.addEventListener("submit", async e => {
     e.preventDefault(); 
     console.log("Submitting run form...");
