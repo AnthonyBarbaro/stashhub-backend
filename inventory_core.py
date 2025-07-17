@@ -60,11 +60,16 @@ def scan_brands(csv_dir: str) -> list[str]:
 # ---------------------------------------------------------------------------
 # run_full_pipeline() – XLSX gen, Drive upload, email
 # ---------------------------------------------------------------------------
+from pathlib import Path      
+def write_status(path: Path, txt: str):
+    path.write_text(txt, encoding="utf-8")
+
 def run_full_pipeline(csv_dir: str,
                       output_dir: str,
                       selected_brands: list[str],
                       emails: str,
-                      tokens_dir: str) -> dict:
+                      tokens_dir: str,
+                      status_file: Path) -> dict:
     from brand_inventory_gui_code import (
         generate_brand_reports,
         upload_brand_reports_to_drive,
@@ -76,6 +81,7 @@ def run_full_pipeline(csv_dir: str,
         " @ ", sys.modules[upload_brand_reports_to_drive.__module__].__file__)
     print(">>> signature:", inspect.signature(upload_brand_reports_to_drive))
     all_brand_map = {}
+    write_status(status_file, "⏳ Generating brand XLSX files…")
     for file in os.listdir(csv_dir):
         if file.lower().endswith(".csv"):
             brand_map = generate_brand_reports(
@@ -87,13 +93,15 @@ def run_full_pipeline(csv_dir: str,
     if not all_brand_map:
         return {"ok": False, "msg": "No XLSX generated–check filters/CSVs."}
     print("upload_brand_reports_to_drive")
+    write_status(status_file, "⏳ Uploading to Google Drive…")
     links = upload_brand_reports_to_drive(all_brand_map, tokens_dir)
     if not links:
         return {"ok": False, "msg": "Drive upload failed."}
 
     body = "".join(f"<h3>{b}</h3><p><a href='{url}'>{url}</a></p>" for b, url in links.items())
     html = f"<html><body><p>Hello,</p>{body}<p>– Brand Inventory Bot</p></body></html>"
-
+    write_status(status_file, "⏳ Sending email…")
     send_email_with_gmail_html("Brand Inventory Drive Links", html, emails, tokens_dir)
     save_config(csv_dir, output_dir)
+    write_status(status_file, "✅ Pipeline complete – email sent!")
     return {"ok": True, "msg": "Pipeline finished & email sent."}

@@ -232,7 +232,8 @@ def run_pipeline():
 
     def bg():
         try:
-            st = run_full_pipeline(csv_dir, xlsx_dir, data["brands"], data["emails"], tokens_dir)
+            st = run_full_pipeline(csv_dir, xlsx_dir, data["brands"], data["emails"], tokens_dir, status_file)
+
             write_status(status_file,
                 ("✅ " if st["ok"] else "❌ ") + st["msg"])
         except Exception as e:
@@ -243,9 +244,8 @@ def run_pipeline():
 @APP.get("/status")
 @login_required
 def status():
-    _,_, _, _, status_file, _ = user_paths()
-    return (status_file.read_text(encoding="utf-8") if status_file.exists() else "No status."), 200, {
-        "Content-Type": "text/plain; charset=utf-8"}
+    _,_, _, status_file, _, _ = user_paths()
+    return (status_file.read_text(encoding="utf-8") if status_file.exists() else "No status.")
 
 # ────── util ────────────────────────────────────────────
 def write_status(path: Path, txt: str):
