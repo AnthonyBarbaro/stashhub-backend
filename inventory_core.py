@@ -63,14 +63,18 @@ def scan_brands(csv_dir: str) -> list[str]:
 def run_full_pipeline(csv_dir: str,
                       output_dir: str,
                       selected_brands: list[str],
-                      emails: str) -> dict:
+                      emails: str,
+                      tokens_dir: str) -> dict:
     from brand_inventory_gui_code import (
         generate_brand_reports,
         upload_brand_reports_to_drive,
         send_email_with_gmail_html,
         save_config,
     )
-
+    import inspect, sys
+    print(">>> using function from:", upload_brand_reports_to_drive.__module__, 
+        " @ ", sys.modules[upload_brand_reports_to_drive.__module__].__file__)
+    print(">>> signature:", inspect.signature(upload_brand_reports_to_drive))
     all_brand_map = {}
     for file in os.listdir(csv_dir):
         if file.lower().endswith(".csv"):
@@ -82,15 +86,14 @@ def run_full_pipeline(csv_dir: str,
 
     if not all_brand_map:
         return {"ok": False, "msg": "No XLSX generated–check filters/CSVs."}
-
-    links = upload_brand_reports_to_drive(all_brand_map)
+    print("upload_brand_reports_to_drive")
+    links = upload_brand_reports_to_drive(all_brand_map, tokens_dir)
     if not links:
         return {"ok": False, "msg": "Drive upload failed."}
 
-    # Build & send email
     body = "".join(f"<h3>{b}</h3><p><a href='{url}'>{url}</a></p>" for b, url in links.items())
     html = f"<html><body><p>Hello,</p>{body}<p>– Brand Inventory Bot</p></body></html>"
 
-    send_email_with_gmail_html("Brand Inventory Drive Links", html, emails)
+    send_email_with_gmail_html("Brand Inventory Drive Links", html, emails, tokens_dir)
     save_config(csv_dir, output_dir)
     return {"ok": True, "msg": "Pipeline finished & email sent."}

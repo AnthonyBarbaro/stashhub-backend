@@ -52,9 +52,16 @@ DRIVE_PARENT_FOLDER_NAME = "INVENTORY"
 
 # OAuth credential files
 CREDENTIALS_FILE = "credentials.json"
-TOKEN_DRIVE_FILE = "token_drive.json"
-TOKEN_GMAIL_FILE = "token_gmail.json"
-
+def get_token_paths(base_folder):
+    """
+    Returns token paths inside the given folder (e.g. user's output folder).
+    """
+    user_token_dir = os.path.join(base_folder, "tokens")
+    os.makedirs(user_token_dir, exist_ok=True)
+    return (
+        os.path.join(user_token_dir, "token_drive.json"),
+        os.path.join(user_token_dir, "token_gmail.json")
+    )
 # Google Drive API Scopes
 DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
@@ -91,48 +98,53 @@ def load_config():
     return None, None
 
 def save_config(input_dir, output_dir):
-    """
-    Writes input_dir and output_dir to config.txt so next run loads them automatically.
-    """
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            f.write(input_dir + "\n")
-            f.write(output_dir + "\n")
+            f.write(f"{input_dir}\n")
+            f.write(f"{output_dir}\n")
     except Exception as e:
         print(f"[ERROR] Could not write config.txt: {e}")
-
 # ----------------------------------------------------------------------
 #                  GOOGLE DRIVE / GMAIL AUTH
 # ----------------------------------------------------------------------
-def drive_authenticate():
-    """Authenticate & build the Google Drive service using OAuth."""
+def drive_authenticate(base_folder):
     creds = None
-    if os.path.exists(TOKEN_DRIVE_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_DRIVE_FILE, DRIVE_SCOPES)
+    token_drive, _ = get_token_paths(base_folder)
+
+    if os.path.exists(token_drive):
+        creds = Credentials.from_authorized_user_file(token_drive, DRIVE_SCOPES)
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(google.auth.transport.requests.Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, DRIVE_SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(TOKEN_DRIVE_FILE, "w") as token:
+            flow.run_local_server(port=0)
+            creds = flow.credentials
+        with open(token_drive, "w") as token:
             token.write(creds.to_json())
+
     return build("drive", "v3", credentials=creds)
 
-def gmail_authenticate():
-    """Authenticate with Gmail API (OAuth) and return a service object."""
+
+def gmail_authenticate(base_folder):
     creds = None
-    if os.path.exists(TOKEN_GMAIL_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_GMAIL_FILE, GMAIL_SCOPES)
+    _, token_gmail = get_token_paths(base_folder)
+
+    if os.path.exists(token_gmail):
+        creds = Credentials.from_authorized_user_file(token_gmail, GMAIL_SCOPES)
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(google.auth.transport.requests.Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, GMAIL_SCOPES)
             creds = flow.run_local_server(port=0)
-        with open(TOKEN_GMAIL_FILE, "w") as f:
+        with open(token_gmail, "w") as f:
             f.write(creds.to_json())
+
     return build("gmail", "v1", credentials=creds)
+
 
 def make_folder_public(drive_service, folder_id):
     """Make the given folder ID publicly viewable."""
@@ -188,7 +200,7 @@ def upload_file_to_drive(drive_service, file_path, parent_id):
     uploaded = drive_service.files().create(body=meta, media_body=media, fields="id").execute()
     return uploaded.get("id")
 
-def send_email_with_gmail_html(subject, html_body, recipients):
+def send_email_with_gmail_html(subject, html_body, recipients, base_folder):
     """
     Sends an HTML email via the Gmail API. 
     recipients can be a list or a single comma-separated string.
@@ -200,7 +212,7 @@ def send_email_with_gmail_html(subject, html_body, recipients):
     if isinstance(recipients, str):
         recipients = [r.strip() for r in recipients.split(",") if r.strip()]
 
-    service = gmail_authenticate()
+    service = gmail_authenticate(base_folder)
 
     msg = MIMEMultipart("alternative")
     msg["From"] = "me"
@@ -341,7 +353,8 @@ def generate_brand_reports(csv_path, out_dir, selected_brands):
         return {}
 
     # Lowercase + strip brand for consistent matching
-    available_df["Brand"] = available_df["Brand"].astype(str).str.strip().str.lower()
+    available_df.loc[:, "Brand"] = available_df["Brand"].astype(str).str.strip().str.lower()
+
 
     # If user selected brand(s), also convert them to lowercase
     if selected_brands:
@@ -382,6 +395,9 @@ def generate_brand_reports(csv_path, out_dir, selected_brands):
 
     os.makedirs(out_dir, exist_ok=True)
     base_csv_name = os.path.splitext(os.path.basename(csv_path))[0]
+    parts = base_csv_name.split("_")
+    store_abbr = parts[-1] if len(parts) > 1 else "UNK"
+
 
     # Group the *available* portion by brand
     brand_map = {}
@@ -392,7 +408,7 @@ def generate_brand_reports(csv_path, out_dir, selected_brands):
             brand_unavail = unavailable_df[unavailable_df["Brand"] == brand_name_lower]
 
         dt_str = datetime.now().strftime("%m-%d-%Y")
-        out_name = f"{base_csv_name}_{brand_name_lower}_{dt_str}.xlsx"
+        out_name = f"{store_abbr}_{brand_name_lower}_{dt_str}.xlsx"
         out_path = os.path.join(out_dir, out_name)
 
         with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
@@ -410,7 +426,7 @@ def generate_brand_reports(csv_path, out_dir, selected_brands):
 
     return brand_map
 
-def upload_brand_reports_to_drive(brand_reports_map):
+def upload_brand_reports_to_drive(brand_reports_map, base_folder):
     """
     brand_reports_map: { brand_name_lower: [list_of_xlsx_paths] }
     1) Create/find top-level "INVENTORY"
@@ -418,7 +434,8 @@ def upload_brand_reports_to_drive(brand_reports_map):
     3) For each brand, create brand folder (public), upload
     Return: { brand_name_lower: "https://drive.google.com/drive/folders/<id>"}
     """
-    drive_svc = drive_authenticate()
+    os.makedirs(base_folder, exist_ok=True) 
+    drive_svc = drive_authenticate(base_folder)
     top_id = find_or_create_folder(drive_svc, DRIVE_PARENT_FOLDER_NAME)
     if not top_id:
         print("[ERROR] Could not find/create top-level folder. Aborting.")
@@ -690,6 +707,7 @@ class BrandInventoryGUI:
             selected_brands = [self.brand_listbox.get(i) for i in sel_indices]
             if "No brands found." in selected_brands:
                 selected_brands = []
+            
         else:
             selected_brands = []
             messagebox.showinfo(
@@ -715,7 +733,11 @@ class BrandInventoryGUI:
                 return
 
             # 2) Upload to Drive => get brand folder links
-            brand_links = upload_brand_reports_to_drive(all_brand_map)
+            print("[DEBUG] Starting Drive upload...")
+            self.show_loading("Uploading to Google Drive and sending email…")
+
+            tokens_dir = os.path.join(out_dir, "tokens")
+            brand_links = upload_brand_reports_to_drive(all_brand_map, tokens_dir)
             if not brand_links:
                 messagebox.showerror("Error", "No folders created on Drive. Aborting email.")
                 return
@@ -739,11 +761,12 @@ class BrandInventoryGUI:
             </html>
             """
             subject = "Brand Inventory Drive Links"
-            send_email_with_gmail_html(subject, body_html, emails)
+            
+            send_email_with_gmail_html(subject, body_html, emails, tokens_dir)
 
             # 4) Save the chosen input/output folders to config.txt for next run
             save_config(in_dir, out_dir)
-
+            self.hide_loading()
             messagebox.showinfo("Success", "All done! Folders uploaded & email sent.")
         except Exception as e:
             traceback.print_exc()
